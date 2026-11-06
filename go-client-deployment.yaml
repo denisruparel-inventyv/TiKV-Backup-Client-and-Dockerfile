@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tikv-go-client
+  namespace: ns-tikv
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # the PVC can only be used by one pod at a time
+  selector:
+    matchLabels:
+      app: tikv-go-client
+  template:
+    metadata:
+      labels:
+        app: tikv-go-client
+        app.kubernetes.io/component: backup     # the chart's policies then admit this pod on 2379/20160/20180
+        sidecar.istio.io/inject: "false"
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      nodeName: denis-worker                    # same node as TiKV, so /var/data/backup is the same folder
+      containers:
+        - name: client
+          image: denisruparel28/tikv-backup-go-client:latest
+          imagePullPolicy: IfNotPresent         # image exists only on the kind nodes
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - name: cluster-client-tls
+              mountPath: /tls
+            - name: client-data
+              mountPath: /data
+            - name: tikv-backup
+              mountPath: /tmp/backup
+      volumes:
+        - name: client-data
+          persistentVolumeClaim:
+            claimName: tikv-go-client-data
+        - name: cluster-client-tls
+          secret:
+            secretName: tikv-cluster-client-secret
+        - name: tikv-backup
+          hostPath:
+            path: /var/data/backup
+            type: DirectoryOrCreate
